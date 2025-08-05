@@ -1,5 +1,5 @@
 {
-  "name": "kaitu",
+  "name": "@allnationconnect/kaitu",
   "version": "1.0.0",
   "description": "Kaitu package placeholder - will be updated by GitHub Actions",
   "main": "index.js",

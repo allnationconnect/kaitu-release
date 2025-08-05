@@ -147,6 +147,12 @@ jobs:
           
       - name: Publish to npm
         working-directory: ./npm
-        run: npm publish
+        run: |
+          echo "Publishing package to npm..."
+          echo "Package name: $(jq -r '.name' package.json)"
+          echo "Package version: $(jq -r '.version' package.json)"
+          
+          # Publish with public access for scoped package
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}

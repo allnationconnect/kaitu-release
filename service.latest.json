@@ -1,0 +1,31 @@
+{
+  "version": "v0.1.0",
+  "notes": "Kaitu Service Binary Release",
+  "pub_date": "2025-08-05T16:37:10.731Z",
+  "platforms": {
+    "darwin-amd64": {
+      "signature": "",
+      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-darwin-amd64"
+    },
+    "darwin-arm64": {
+      "signature": "",
+      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-darwin-arm64"
+    },
+    "windows-amd64": {
+      "signature": "",
+      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-windows-amd64.exe"
+    },
+    "windows-arm64": {
+      "signature": "",
+      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-windows-arm64.exe"
+    },
+    "linux-amd64": {
+      "signature": "",
+      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-linux-amd64"
+    },
+    "linux-arm64": {
+      "signature": "",
+      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-linux-arm64"
+    }
+  }
+}
