@@ -163,14 +163,13 @@ jobs:
           
           # Publish with public access for scoped package
           echo "Attempting to publish..."
-          echo "SKIPPING ACTUAL PUBLISH FOR DEBUGGING - would run: npm publish --access public --verbose"
-          echo "All steps completed successfully!"
-          
-          # npm publish --access public --verbose || {
-          #   echo "npm publish failed with exit code $?"
-          #   echo "npm config:"
-          #   npm config list
-          #   exit 1
-          # }
+          npm publish --access public --verbose || {
+            echo "npm publish failed with exit code $?"
+            echo "npm config:"
+            npm config list
+            echo "Checking .npmrc file..."
+            cat ~/.npmrc || echo "No .npmrc file found"
+            exit 1
+          }
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
