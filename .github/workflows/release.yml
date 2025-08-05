@@ -31,12 +31,28 @@ jobs:
           curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json \
                -o latest.json
+          
+          # Verify downloaded file is valid JSON
+          if ! jq . latest.json > /dev/null 2>&1; then
+            echo "Error: latest.json is not valid JSON"
+            cat latest.json
+            exit 1
+          fi
+          echo "latest.json downloaded and validated successfully"
                
       - name: Download service.latest.json
         run: |
           curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json \
                -o service.latest.json
+          
+          # Verify downloaded file is valid JSON
+          if ! jq . service.latest.json > /dev/null 2>&1; then
+            echo "Error: service.latest.json is not valid JSON"
+            cat service.latest.json
+            exit 1
+          fi
+          echo "service.latest.json downloaded and validated successfully"
                
       - name: Create npm directory if not exists
         run: mkdir -p npm
@@ -44,25 +60,31 @@ jobs:
       - name: Update package.json with service data
         run: |
           # Read service data and update package.json service field
-          SERVICE_DATA=$(cat service.latest.json)
+          echo "Reading service.latest.json..."
+          cat service.latest.json
           
           # Check if npm/package.json exists, if not create basic structure
           if [ ! -f npm/package.json ]; then
             echo '{}' > npm/package.json
           fi
           
-          # Update service field in package.json
-          jq --argjson service "$SERVICE_DATA" '.service = $service' npm/package.json > npm/package.json.tmp
+          # Update service field in package.json using slurpfile to avoid shell variable issues
+          jq --slurpfile service service.latest.json '.service = $service[0]' npm/package.json > npm/package.json.tmp
           mv npm/package.json.tmp npm/package.json
+          echo "Updated package.json with service data:"
+          jq '.service' npm/package.json
           
       - name: Update package.json with latest.json data
         run: |
           # Read latest.json and merge with package.json
-          LATEST_DATA=$(cat latest.json)
+          echo "Reading latest.json..."
+          cat latest.json
           
-          # Merge latest.json data into package.json (latest.json keys override package.json)
-          jq --argjson latest "$LATEST_DATA" '. * $latest' npm/package.json > npm/package.json.tmp
+          # Merge latest.json data into package.json (latest.json keys override package.json) using slurpfile
+          jq --slurpfile latest latest.json '. * $latest[0]' npm/package.json > npm/package.json.tmp
           mv npm/package.json.tmp npm/package.json
+          echo "Final package.json after merging latest.json:"
+          cat npm/package.json
           
       - name: Download files listed in latest.json to npm directory
         run: |
