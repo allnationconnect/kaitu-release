@@ -1,0 +1,85 @@
+name: Release and Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release-and-publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+          
+      - name: Extract version from tag
+        id: get_version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+          
+      - name: Download latest.json
+        run: |
+          curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+               -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json \
+               -o latest.json
+               
+      - name: Download service.latest.json
+        run: |
+          curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+               -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json \
+               -o service.latest.json
+               
+      - name: Create npm directory if not exists
+        run: mkdir -p npm
+        
+      - name: Update package.json with service data
+        run: |
+          # Read service data and update package.json service field
+          SERVICE_DATA=$(cat service.latest.json)
+          
+          # Check if npm/package.json exists, if not create basic structure
+          if [ ! -f npm/package.json ]; then
+            echo '{}' > npm/package.json
+          fi
+          
+          # Update service field in package.json
+          jq --argjson service "$SERVICE_DATA" '.service = $service' npm/package.json > npm/package.json.tmp
+          mv npm/package.json.tmp npm/package.json
+          
+      - name: Update package.json with latest.json data
+        run: |
+          # Read latest.json and merge with package.json
+          LATEST_DATA=$(cat latest.json)
+          
+          # Merge latest.json data into package.json (latest.json keys override package.json)
+          jq --argjson latest "$LATEST_DATA" '. * $latest' npm/package.json > npm/package.json.tmp
+          mv npm/package.json.tmp npm/package.json
+          
+      - name: Download files listed in latest.json to npm directory
+        run: |
+          # Extract file list from latest.json and download each file
+          FILES=$(jq -r '.files[]? // empty' latest.json 2>/dev/null || echo "")
+          
+          if [ -n "$FILES" ]; then
+            for file in $FILES; do
+              echo "Downloading $file..."
+              curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+                   -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/$file \
+                   -o npm/$file
+            done
+          fi
+          
+      - name: Publish to npm
+        working-directory: ./npm
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
