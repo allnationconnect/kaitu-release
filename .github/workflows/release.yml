@@ -47,8 +47,9 @@ jobs:
             curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                  https://api.github.com/repos/allnationconnect/kaitu/releases/tags/${{ steps.get_version.outputs.VERSION }}
             
-            echo "Creating default latest.json since file not found..."
-            echo '{}' > latest.json
+            echo "ERROR: latest.json not found in release assets"
+            echo "Cannot proceed without latest.json - this file should contain package configuration and file list"
+            exit 1
           fi
           
           echo "Downloaded latest.json size: $(wc -c < latest.json) bytes"
@@ -81,8 +82,9 @@ jobs:
             echo "Response content:"
             cat service.latest.json
             
-            echo "Creating default service.latest.json since file not found..."
-            echo '{}' > service.latest.json
+            echo "ERROR: service.latest.json not found in release assets"
+            echo "Cannot proceed without service.latest.json - this file should contain service configuration"
+            exit 1
           fi
           
           echo "Downloaded service.latest.json size: $(wc -c < service.latest.json) bytes"
@@ -102,22 +104,38 @@ jobs:
       - name: Create npm directory if not exists
         run: mkdir -p npm
         
+      - name: Initialize package.json with correct version
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          CLEAN_VERSION="${{ steps.get_version.outputs.CLEAN_VERSION }}"
+          
+          # Copy the base package.json from the repo
+          cp npm/package.json npm/package.json.backup
+          
+          # Initialize with correct name and version
+          jq --arg name "kaitu" --arg version "$CLEAN_VERSION" '.name = $name | .version = $version' npm/package.json > npm/package.json.tmp
+          mv npm/package.json.tmp npm/package.json
+          
+          echo "Initialized package.json with correct version:"
+          echo "Tag: $VERSION -> Package version: $CLEAN_VERSION"
+          cat npm/package.json
+          
       - name: Update package.json with service data
         run: |
           # Read service data and update package.json service field
           echo "Reading service.latest.json..."
           cat service.latest.json
           
-          # Check if npm/package.json exists, if not create basic structure
-          if [ ! -f npm/package.json ]; then
-            echo '{}' > npm/package.json
+          # Only update service field if service.latest.json is not empty
+          if [ "$(jq 'length' service.latest.json)" -gt 0 ]; then
+            echo "Updating package.json with service data..."
+            jq --slurpfile service service.latest.json '.service = $service[0]' npm/package.json > npm/package.json.tmp
+            mv npm/package.json.tmp npm/package.json
+            echo "Updated package.json with service data:"
+            jq '.service' npm/package.json
+          else
+            echo "service.latest.json is empty, skipping service update"
           fi
-          
-          # Update service field in package.json using slurpfile to avoid shell variable issues
-          jq --slurpfile service service.latest.json '.service = $service[0]' npm/package.json > npm/package.json.tmp
-          mv npm/package.json.tmp npm/package.json
-          echo "Updated package.json with service data:"
-          jq '.service' npm/package.json
           
       - name: Update package.json with latest.json data
         run: |
@@ -125,15 +143,24 @@ jobs:
           echo "Reading latest.json..."
           cat latest.json
           
-          # Merge latest.json data into package.json (latest.json keys override package.json) using slurpfile
-          jq --slurpfile latest latest.json '. * $latest[0]' npm/package.json > npm/package.json.tmp
-          mv npm/package.json.tmp npm/package.json
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          CLEAN_VERSION="${{ steps.get_version.outputs.CLEAN_VERSION }}"
           
-          # Force set the correct package name (override any scoped name from latest.json)
-          jq '.name = "kaitu"' npm/package.json > npm/package.json.tmp
-          mv npm/package.json.tmp npm/package.json
+          # Only merge latest.json if it's not empty and has meaningful content
+          if [ "$(jq 'length' latest.json)" -gt 0 ]; then
+            echo "Merging latest.json data into package.json..."
+            # Merge but preserve name and version
+            jq --slurpfile latest latest.json --arg name "kaitu" --arg version "$CLEAN_VERSION" \
+               '. * $latest[0] | .name = $name | .version = $version' npm/package.json > npm/package.json.tmp
+            mv npm/package.json.tmp npm/package.json
+          else
+            echo "latest.json is empty, skipping merge but ensuring correct name/version"
+            jq --arg name "kaitu" --arg version "$CLEAN_VERSION" '.name = $name | .version = $version' npm/package.json > npm/package.json.tmp
+            mv npm/package.json.tmp npm/package.json
+          fi
           
-          echo "Final package.json after merging latest.json and fixing name:"
+          echo "Final package.json after processing:"
+          echo "Tag version: $VERSION -> Package version: $CLEAN_VERSION"
           cat npm/package.json
           
       - name: Download files listed in latest.json to npm directory
@@ -142,13 +169,38 @@ jobs:
           FILES=$(jq -r '.files[]? // empty' latest.json 2>/dev/null || echo "")
           
           if [ -n "$FILES" ]; then
+            echo "Files to download from latest.json:"
+            echo "$FILES"
+            DOWNLOAD_FAILED=false
+            
             for file in $FILES; do
               echo "Downloading $file..."
-              curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+              HTTP_CODE=$(curl -w "%{http_code}" -s -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                    -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/$file \
-                   -o npm/$file
+                   -o npm/$file)
+              
+              if [ "$HTTP_CODE" = "200" ]; then
+                echo "Successfully downloaded $file ($(wc -c < npm/$file) bytes)"
+              else
+                echo "ERROR: Failed to download required file $file (HTTP $HTTP_CODE)"
+                rm -f npm/$file  # Remove any partial/error file
+                DOWNLOAD_FAILED=true
+              fi
             done
+            
+            if [ "$DOWNLOAD_FAILED" = "true" ]; then
+              echo "ERROR: One or more required files failed to download"
+              echo "Cannot proceed with NPM publish without all required files"
+              exit 1
+            fi
+          else
+            echo "ERROR: No files specified in latest.json"
+            echo "latest.json should contain a 'files' array with binary/executable files"
+            exit 1
           fi
+          
+          echo "Final npm directory contents:"
+          ls -la npm/
           
       - name: Publish to npm
         working-directory: ./npm
