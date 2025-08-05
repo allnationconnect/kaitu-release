@@ -46,7 +46,9 @@ jobs:
             echo "Checking if release ${{ steps.get_version.outputs.VERSION }} exists..."
             curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                  https://api.github.com/repos/allnationconnect/kaitu/releases/tags/${{ steps.get_version.outputs.VERSION }}
-            exit 1
+            
+            echo "Creating default latest.json since file not found..."
+            echo '{}' > latest.json
           fi
           
           echo "Downloaded latest.json size: $(wc -c < latest.json) bytes"
@@ -78,7 +80,9 @@ jobs:
             echo "Failed to download service.latest.json with HTTP code: $HTTP_CODE"
             echo "Response content:"
             cat service.latest.json
-            exit 1
+            
+            echo "Creating default service.latest.json since file not found..."
+            echo '{}' > service.latest.json
           fi
           
           echo "Downloaded service.latest.json size: $(wc -c < service.latest.json) bytes"
