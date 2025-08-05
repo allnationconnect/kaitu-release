@@ -170,15 +170,39 @@ jobs:
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           CLEAN_VERSION="${{ steps.get_version.outputs.CLEAN_VERSION }}"
           
-          # Only merge latest.json if it's not empty and has meaningful content
+          # Extract useful fields from latest.json for package.json
           if [ "$(jq 'length' latest.json)" -gt 0 ]; then
-            echo "Merging latest.json data into package.json..."
-            # Merge but preserve name and version
-            jq --slurpfile latest latest.json --arg name "kaitu" --arg version "$CLEAN_VERSION" \
-               '. * $latest[0] | .name = $name | .version = $version' npm/package.json > npm/package.json.tmp
+            echo "Adding metadata from latest.json to package.json..."
+            
+            # Create enhanced package.json with release info
+            jq --arg name "kaitu" --arg version "$CLEAN_VERSION" \
+               --slurpfile latest latest.json \
+               --slurpfile service service.latest.json \
+               '{
+                 name: $name,
+                 version: $version,
+                 description: "Kaitu - Cross-platform desktop application and service",
+                 main: "index.js",
+                 keywords: ["kaitu", "desktop", "service", "proxy", "cross-platform"],
+                 author: "AllNation Connect",
+                 license: "ISC",
+                 bin: {},
+                 scripts: {
+                   test: "echo \"Error: no test specified\" && exit 1"
+                 },
+                 releases: {
+                   desktop: $latest[0],
+                   service: $service[0]
+                 },
+                 platforms: ($latest[0].platforms // {}) + ($service[0].platforms // {}),
+                 repository: {
+                   type: "git",
+                   url: "https://github.com/allnationconnect/kaitu"
+                 }
+               }' npm/package.json > npm/package.json.tmp
             mv npm/package.json.tmp npm/package.json
           else
-            echo "latest.json is empty, skipping merge but ensuring correct name/version"
+            echo "latest.json is empty, using basic package.json"
             jq --arg name "kaitu" --arg version "$CLEAN_VERSION" '.name = $name | .version = $version' npm/package.json > npm/package.json.tmp
             mv npm/package.json.tmp npm/package.json
           fi
@@ -187,32 +211,51 @@ jobs:
           echo "Tag version: $VERSION -> Package version: $CLEAN_VERSION"
           cat npm/package.json
           
-      - name: Download files listed in latest.json to npm directory
+      - name: Download files from latest.json and service.latest.json
         run: |
-          # Extract file list from latest.json and download each file
-          FILES=$(jq -r '.files[]? // empty' latest.json 2>/dev/null || echo "")
+          echo "Extracting file names from platform URLs..."
           
-          if [ -n "$FILES" ]; then
-            echo "Files to download from latest.json:"
-            echo "$FILES"
-            DOWNLOAD_FAILED=false
-            
-            source download_asset.sh
-            
-            for file in $FILES; do
+          # Extract file names from latest.json platforms
+          LATEST_FILES=$(jq -r '.platforms[] | .url | split("/") | .[-1]' latest.json 2>/dev/null | sort -u)
+          echo "Files from latest.json platforms:"
+          echo "$LATEST_FILES"
+          
+          # Extract file names from service.latest.json platforms  
+          SERVICE_FILES=$(jq -r '.platforms[] | .url | split("/") | .[-1]' service.latest.json 2>/dev/null | sort -u)
+          echo "Files from service.latest.json platforms:"
+          echo "$SERVICE_FILES"
+          
+          # Combine and deduplicate all files
+          ALL_FILES=$(echo -e "$LATEST_FILES\n$SERVICE_FILES" | sort -u | grep -v '^$')
+          
+          if [ -z "$ALL_FILES" ]; then
+            echo "ERROR: No files found in platform URLs"
+            echo "Both latest.json and service.latest.json should contain platform URLs"
+            exit 1
+          fi
+          
+          echo "All unique files to download:"
+          echo "$ALL_FILES"
+          
+          # Download each file
+          DOWNLOAD_FAILED=false
+          source download_asset.sh
+          
+          echo "$ALL_FILES" | while IFS= read -r file; do
+            if [ -n "$file" ]; then
+              echo "Downloading: $file"
               if ! download_private_asset "$file" "npm/$file"; then
-                DOWNLOAD_FAILED=true
+                echo "Failed to download $file"
+                touch /tmp/download_failed
               fi
-            done
-            
-            if [ "$DOWNLOAD_FAILED" = "true" ]; then
-              echo "ERROR: One or more required files failed to download"
-              echo "Cannot proceed with NPM publish without all required files"
-              exit 1
             fi
-          else
-            echo "ERROR: No files specified in latest.json"
-            echo "latest.json should contain a 'files' array with binary/executable files"
+          done
+          
+          # Check if any downloads failed
+          if [ -f /tmp/download_failed ]; then
+            echo "ERROR: One or more required files failed to download"
+            echo "Cannot proceed with NPM publish without all required files"
+            rm -f /tmp/download_failed
             exit 1
           fi
           
