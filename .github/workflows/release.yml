@@ -28,28 +28,44 @@ jobs:
           
       - name: Download latest.json
         run: |
-          curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+          echo "Downloading from: https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json"
+          
+          curl -v -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json \
                -o latest.json
+          
+          echo "Downloaded latest.json size: $(wc -c < latest.json) bytes"
+          echo "Content of latest.json:"
+          cat latest.json
+          echo "--- End of latest.json ---"
           
           # Verify downloaded file is valid JSON
           if ! jq . latest.json > /dev/null 2>&1; then
             echo "Error: latest.json is not valid JSON"
-            cat latest.json
+            echo "Raw content (hex dump):"
+            hexdump -C latest.json | head -20
             exit 1
           fi
           echo "latest.json downloaded and validated successfully"
                
       - name: Download service.latest.json
         run: |
-          curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+          echo "Downloading from: https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json"
+          
+          curl -v -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json \
                -o service.latest.json
+          
+          echo "Downloaded service.latest.json size: $(wc -c < service.latest.json) bytes"
+          echo "Content of service.latest.json:"
+          cat service.latest.json
+          echo "--- End of service.latest.json ---"
           
           # Verify downloaded file is valid JSON
           if ! jq . service.latest.json > /dev/null 2>&1; then
             echo "Error: service.latest.json is not valid JSON"
-            cat service.latest.json
+            echo "Raw content (hex dump):"
+            hexdump -C service.latest.json | head -20
             exit 1
           fi
           echo "service.latest.json downloaded and validated successfully"
