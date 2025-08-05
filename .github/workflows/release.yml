@@ -30,9 +30,24 @@ jobs:
         run: |
           echo "Downloading from: https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json"
           
-          curl -v -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+          # Use curl with fail option and better error handling
+          HTTP_CODE=$(curl -w "%{http_code}" -s -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json \
-               -o latest.json
+               -o latest.json)
+          
+          echo "HTTP Response Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Failed to download latest.json with HTTP code: $HTTP_CODE"
+            echo "Response content:"
+            cat latest.json
+            
+            # Check if release exists
+            echo "Checking if release ${{ steps.get_version.outputs.VERSION }} exists..."
+            curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+                 https://api.github.com/repos/allnationconnect/kaitu/releases/tags/${{ steps.get_version.outputs.VERSION }}
+            exit 1
+          fi
           
           echo "Downloaded latest.json size: $(wc -c < latest.json) bytes"
           echo "Content of latest.json:"
@@ -52,9 +67,19 @@ jobs:
         run: |
           echo "Downloading from: https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json"
           
-          curl -v -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
+          # Use curl with fail option and better error handling
+          HTTP_CODE=$(curl -w "%{http_code}" -s -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
                -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json \
-               -o service.latest.json
+               -o service.latest.json)
+          
+          echo "HTTP Response Code: $HTTP_CODE"
+          
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Failed to download service.latest.json with HTTP code: $HTTP_CODE"
+            echo "Response content:"
+            cat service.latest.json
+            exit 1
+          fi
           
           echo "Downloaded service.latest.json size: $(wc -c < service.latest.json) bytes"
           echo "Content of service.latest.json:"
