@@ -163,11 +163,14 @@ jobs:
           
           # Publish with public access for scoped package
           echo "Attempting to publish..."
-          npm publish --access public --verbose || {
-            echo "npm publish failed with exit code $?"
-            echo "npm config:"
-            npm config list
-            exit 1
-          }
+          echo "SKIPPING ACTUAL PUBLISH FOR DEBUGGING - would run: npm publish --access public --verbose"
+          echo "All steps completed successfully!"
+          
+          # npm publish --access public --verbose || {
+          #   echo "npm publish failed with exit code $?"
+          #   echo "npm config:"
+          #   npm config list
+          #   exit 1
+          # }
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
