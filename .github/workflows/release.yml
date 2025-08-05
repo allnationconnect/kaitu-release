@@ -24,30 +24,66 @@ jobs:
         run: |
           VERSION=${GITHUB_REF#refs/tags/}
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "CLEAN_VERSION=${VERSION#v}" >> $GITHUB_OUTPUT
           echo "Version: $VERSION"
+          
+      - name: Setup GitHub API functions
+        run: |
+          # Create a reusable function for downloading private release assets
+          cat > download_asset.sh << 'EOF'
+          #!/bin/bash
+          download_private_asset() {
+            local filename=$1
+            local output_path=$2
+            local repo="allnationconnect/kaitu"
+            local version="${{ steps.get_version.outputs.VERSION }}"
+            
+            echo "Downloading $filename from private release..."
+            
+            # Get asset ID
+            ASSET_ID=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/$repo/releases/tags/$version" \
+                | jq -r --arg filename "$filename" '.assets[] | select(.name==$filename) | .id')
+            
+            if [ "$ASSET_ID" = "null" ] || [ -z "$ASSET_ID" ]; then
+              echo "ERROR: $filename not found in release assets"
+              return 1
+            fi
+            
+            echo "Found $filename with asset ID: $ASSET_ID"
+            
+            # Download asset
+            HTTP_CODE=$(curl -w "%{http_code}" -s \
+                -H "Authorization: Bearer ${{ secrets.GH_PAT_TOKEN }}" \
+                -H "Accept: application/octet-stream" \
+                -L "https://api.github.com/repos/$repo/releases/assets/$ASSET_ID" \
+                -o "$output_path")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "Successfully downloaded $filename ($(wc -c < "$output_path") bytes)"
+              return 0
+            else
+              echo "ERROR: Failed to download $filename (HTTP $HTTP_CODE)"
+              rm -f "$output_path"
+              return 1
+            fi
+          }
+          EOF
+          
+          chmod +x download_asset.sh
+          source download_asset.sh
           
       - name: Download latest.json
         run: |
-          echo "Downloading from: https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json"
+          source download_asset.sh
           
-          # Use curl with fail option and better error handling
-          HTTP_CODE=$(curl -w "%{http_code}" -s -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
-               -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/latest.json \
-               -o latest.json)
-          
-          echo "HTTP Response Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Failed to download latest.json with HTTP code: $HTTP_CODE"
-            echo "Response content:"
-            cat latest.json
-            
-            # Check if release exists
-            echo "Checking if release ${{ steps.get_version.outputs.VERSION }} exists..."
-            curl -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
-                 https://api.github.com/repos/allnationconnect/kaitu/releases/tags/${{ steps.get_version.outputs.VERSION }}
-            
-            echo "ERROR: latest.json not found in release assets"
+          if ! download_private_asset "latest.json" "latest.json"; then
+            echo "Checking available assets..."
+            curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                https://api.github.com/repos/allnationconnect/kaitu/releases/tags/${{ steps.get_version.outputs.VERSION }} \
+                | jq -r '.assets[].name'
             echo "Cannot proceed without latest.json - this file should contain package configuration and file list"
             exit 1
           fi
@@ -68,21 +104,9 @@ jobs:
                
       - name: Download service.latest.json
         run: |
-          echo "Downloading from: https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json"
+          source download_asset.sh
           
-          # Use curl with fail option and better error handling
-          HTTP_CODE=$(curl -w "%{http_code}" -s -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
-               -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/service.latest.json \
-               -o service.latest.json)
-          
-          echo "HTTP Response Code: $HTTP_CODE"
-          
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Failed to download service.latest.json with HTTP code: $HTTP_CODE"
-            echo "Response content:"
-            cat service.latest.json
-            
-            echo "ERROR: service.latest.json not found in release assets"
+          if ! download_private_asset "service.latest.json" "service.latest.json"; then
             echo "Cannot proceed without service.latest.json - this file should contain service configuration"
             exit 1
           fi
@@ -173,17 +197,10 @@ jobs:
             echo "$FILES"
             DOWNLOAD_FAILED=false
             
+            source download_asset.sh
+            
             for file in $FILES; do
-              echo "Downloading $file..."
-              HTTP_CODE=$(curl -w "%{http_code}" -s -H "Authorization: token ${{ secrets.GH_PAT_TOKEN }}" \
-                   -L https://github.com/allnationconnect/kaitu/releases/download/${{ steps.get_version.outputs.VERSION }}/$file \
-                   -o npm/$file)
-              
-              if [ "$HTTP_CODE" = "200" ]; then
-                echo "Successfully downloaded $file ($(wc -c < npm/$file) bytes)"
-              else
-                echo "ERROR: Failed to download required file $file (HTTP $HTTP_CODE)"
-                rm -f npm/$file  # Remove any partial/error file
+              if ! download_private_asset "$file" "npm/$file"; then
                 DOWNLOAD_FAILED=true
               fi
             done
