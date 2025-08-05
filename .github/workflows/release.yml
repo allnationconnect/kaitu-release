@@ -128,7 +128,12 @@ jobs:
           # Merge latest.json data into package.json (latest.json keys override package.json) using slurpfile
           jq --slurpfile latest latest.json '. * $latest[0]' npm/package.json > npm/package.json.tmp
           mv npm/package.json.tmp npm/package.json
-          echo "Final package.json after merging latest.json:"
+          
+          # Force set the correct package name (override any scoped name from latest.json)
+          jq '.name = "kaitu"' npm/package.json > npm/package.json.tmp
+          mv npm/package.json.tmp npm/package.json
+          
+          echo "Final package.json after merging latest.json and fixing name:"
           cat npm/package.json
           
       - name: Download files listed in latest.json to npm directory
