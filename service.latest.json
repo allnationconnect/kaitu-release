@@ -1,31 +1,26 @@
 {
-  "version": "v0.1.0",
-  "notes": "Kaitu Service Binary Release",
-  "pub_date": "2025-08-05T16:37:10.731Z",
-  "platforms": {
-    "darwin-amd64": {
-      "signature": "",
-      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-darwin-amd64"
-    },
-    "darwin-arm64": {
-      "signature": "",
-      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-darwin-arm64"
-    },
-    "windows-amd64": {
-      "signature": "",
-      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-windows-amd64.exe"
-    },
-    "windows-arm64": {
-      "signature": "",
-      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-windows-arm64.exe"
-    },
-    "linux-amd64": {
-      "signature": "",
-      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-linux-amd64"
-    },
-    "linux-arm64": {
-      "signature": "",
-      "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-linux-arm64"
-    }
+  "darwin-amd64": {
+    "hash": "sha256:ba87eff2547b5d2f6aa9339f07894d42ca2bfd6be3ffd309ee001c4f6e22eb0f",
+    "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-darwin-amd64"
+  },
+  "darwin-arm64": {
+    "hash": "sha256:2de08a72ab611fd3d886131b219ad7f755bc829c08da68934b329231d8239acc",
+    "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-darwin-arm64"
+  },
+  "windows-amd64": {
+    "hash": "sha256:1b68a644ecebdbc54e8cdfddb14239a59e1cf16d1c7444c11d53bfff356e1ead",
+    "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-windows-amd64.exe"
+  },
+  "windows-arm64": {
+    "hash": "sha256:9c51b94d0f9ac4769ca4c22fdd239479707ddc09aeb165fe79289e3943fa6293",
+    "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-windows-arm64.exe"
+  },
+  "linux-amd64": {
+    "hash": "sha256:8b88570f16b1451c710c7b6830c860040fa784bb9e48c54fb15b95b12d93cc80",
+    "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-linux-amd64"
+  },
+  "linux-arm64": {
+    "hash": "sha256:c4e3a65b2921a2629400f8375735137abe9e0270b8e2f11876b3d948022173ef",
+    "url": "https://github.com/allnationconnect/kaitu/releases/download/v0.1.0/kaitu-service-linux-arm64"
   }
 }

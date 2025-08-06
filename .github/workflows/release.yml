@@ -74,40 +74,14 @@ jobs:
           chmod +x download_asset.sh
           source download_asset.sh
           
-      - name: Download latest.json
+      - name: Download required JSON files
         run: |
           source download_asset.sh
-          
-          if ! download_private_asset "latest.json" "latest.json"; then
-            echo "Checking available assets..."
-            curl -s -H "Authorization: Bearer ${{ secrets.GH_PAT_TOKEN }}" \
-                -H "Accept: application/vnd.github.v3+json" \
-                https://api.github.com/repos/allnationconnect/kaitu/releases/tags/${{ steps.get_version.outputs.VERSION }} \
-                | jq -r '.assets[].name'
-            echo "Cannot proceed without latest.json - this file should contain package configuration and file list"
-            exit 1
-          fi
-          
-          echo "Downloaded latest.json size: $(wc -c < latest.json) bytes"
-          echo "Content of latest.json:"
-          cat latest.json
-          echo "--- End of latest.json ---"
-          
-          # Verify downloaded file is valid JSON
-          if ! jq . latest.json > /dev/null 2>&1; then
-            echo "Error: latest.json is not valid JSON"
-            echo "Raw content (hex dump):"
-            hexdump -C latest.json | head -20
-            exit 1
-          fi
-          echo "latest.json downloaded and validated successfully"
+          echo "Downloading required JSON configuration files..."
                
-      - name: Download service.latest.json
-        run: |
-          source download_asset.sh
-          
+          # Download service.latest.json (required)
           if ! download_private_asset "service.latest.json" "service.latest.json"; then
-            echo "Cannot proceed without service.latest.json - this file should contain service configuration"
+            echo "ERROR: Cannot proceed without service.latest.json"
             exit 1
           fi
           
@@ -116,56 +90,45 @@ jobs:
           cat service.latest.json
           echo "--- End of service.latest.json ---"
           
-          # Verify downloaded file is valid JSON
           if ! jq . service.latest.json > /dev/null 2>&1; then
-            echo "Error: service.latest.json is not valid JSON"
-            echo "Raw content (hex dump):"
-            hexdump -C service.latest.json | head -20
+            echo "ERROR: service.latest.json is not valid JSON"
             exit 1
           fi
-          echo "service.latest.json downloaded and validated successfully"
-               
-      - name: Download installer.latest.json and updater.latest.json
-        run: |
-          source download_asset.sh
+          echo "✓ service.latest.json downloaded and validated successfully"
           
-          # Download installer.latest.json
-          if download_private_asset "installer.latest.json" "installer.latest.json"; then
-            echo "Downloaded installer.latest.json size: $(wc -c < installer.latest.json) bytes"
-            echo "Content of installer.latest.json:"
-            cat installer.latest.json
-            echo "--- End of installer.latest.json ---"
-            
-            # Verify downloaded file is valid JSON
-            if ! jq . installer.latest.json > /dev/null 2>&1; then
-              echo "Error: installer.latest.json is not valid JSON"
-              echo "Raw content (hex dump):"
-              hexdump -C installer.latest.json | head -20
-              exit 1
-            fi
-            echo "installer.latest.json downloaded and validated successfully"
-          else
-            echo "installer.latest.json not found - proceeding without it"
+          # Download installer.latest.json (required)
+          if ! download_private_asset "installer.latest.json" "installer.latest.json"; then
+            echo "ERROR: Cannot proceed without installer.latest.json"
+            exit 1
           fi
           
-          # Download updater.latest.json
-          if download_private_asset "updater.latest.json" "updater.latest.json"; then
-            echo "Downloaded updater.latest.json size: $(wc -c < updater.latest.json) bytes"
-            echo "Content of updater.latest.json:"
-            cat updater.latest.json
-            echo "--- End of updater.latest.json ---"
-            
-            # Verify downloaded file is valid JSON
-            if ! jq . updater.latest.json > /dev/null 2>&1; then
-              echo "Error: updater.latest.json is not valid JSON"
-              echo "Raw content (hex dump):"
-              hexdump -C updater.latest.json | head -20
-              exit 1
-            fi
-            echo "updater.latest.json downloaded and validated successfully"
-          else
-            echo "updater.latest.json not found - proceeding without it"
+          echo "Downloaded installer.latest.json size: $(wc -c < installer.latest.json) bytes"
+          echo "Content of installer.latest.json:"
+          cat installer.latest.json
+          echo "--- End of installer.latest.json ---"
+          
+          if ! jq . installer.latest.json > /dev/null 2>&1; then
+            echo "ERROR: installer.latest.json is not valid JSON"
+            exit 1
           fi
+          echo "✓ installer.latest.json downloaded and validated successfully"
+          
+          # Download updater.latest.json (required)
+          if ! download_private_asset "updater.latest.json" "updater.latest.json"; then
+            echo "ERROR: Cannot proceed without updater.latest.json"
+            exit 1
+          fi
+          
+          echo "Downloaded updater.latest.json size: $(wc -c < updater.latest.json) bytes"
+          echo "Content of updater.latest.json:"
+          cat updater.latest.json
+          echo "--- End of updater.latest.json ---"
+          
+          if ! jq . updater.latest.json > /dev/null 2>&1; then
+            echo "ERROR: updater.latest.json is not valid JSON"
+            exit 1
+          fi
+          echo "✓ updater.latest.json downloaded and validated successfully"
                
       - name: Create npm directory if not exists
         run: mkdir -p npm
@@ -199,16 +162,26 @@ jobs:
               return urlparse(url).path.split('/')[-1]
           
           def get_all_files_from_json(json_data):
-              """Extract all filenames from platforms in JSON"""
+              """Extract all filenames from platforms in JSON or direct platform URLs"""
               files = set()
+              
+              # Handle updater.latest.json format (has platforms key)
               if 'platforms' in json_data:
                   for platform_data in json_data['platforms'].values():
                       if 'url' in platform_data:
                           filename = extract_filename_from_url(platform_data['url'])
                           files.add(filename)
+              
+              # Handle service.latest.json and installer.latest.json format (direct platform keys)
+              else:
+                  for platform_key, platform_data in json_data.items():
+                      if isinstance(platform_data, dict) and 'url' in platform_data:
+                          filename = extract_filename_from_url(platform_data['url'])
+                          files.add(filename)
+              
               return sorted(list(files))
           
-          def merge_package_json(base_package, latest_data, service_data, installer_data, updater_data, version):
+          def merge_package_json(base_package, service_data, installer_data, updater_data, version):
               """Create final package.json with proper structure"""
               result = {
                   "name": "kaitu",
@@ -228,24 +201,18 @@ jobs:
                   }
               }
               
-              # Add updater data directly to root level (except name/version)
-              if updater_data:
-                  for key, value in updater_data.items():
-                      if key not in ["name", "version"]:  # Don't override name/version
-                          result[key] = value
+              # Add service data under "service" key
+              if service_data:
+                  result["service"] = service_data
               
               # Add installer data under "installer" key
               if installer_data:
                   result["installer"] = installer_data
               
-              # Add service data under "service" key
-              if service_data:
-                  result["service"] = service_data
-              
-              # Add all latest.json keys directly (has lowest priority)
-              if latest_data:
-                  for key, value in latest_data.items():
-                      if key not in ["name", "version"] and key not in result:  # Don't override existing keys
+              # Add updater data directly to root level (except name/version) - highest priority
+              if updater_data:
+                  for key, value in updater_data.items():
+                      if key not in ["name", "version"]:  # Don't override name/version
                           result[key] = value
               
               return result
@@ -256,27 +223,19 @@ jobs:
               if command == "extract_files":
                   # Extract files from all JSON files
                   all_files = []
-                  
-                  # Extract from latest.json
-                  with open('latest.json', 'r') as f:
-                      latest_data = json.load(f)
-                  latest_files = get_all_files_from_json(latest_data)
-                  all_files.extend(latest_files)
-                  print("Files from latest.json:")
-                  for f in latest_files:
-                      print(f)
+                  import os
                   
                   # Extract from service.latest.json
-                  with open('service.latest.json', 'r') as f:
-                      service_data = json.load(f)
-                  service_files = get_all_files_from_json(service_data)
-                  all_files.extend(service_files)
-                  print("\nFiles from service.latest.json:")
-                  for f in service_files:
-                      print(f)
+                  if os.path.exists('service.latest.json'):
+                      with open('service.latest.json', 'r') as f:
+                          service_data = json.load(f)
+                      service_files = get_all_files_from_json(service_data)
+                      all_files.extend(service_files)
+                      print("Files from service.latest.json:")
+                      for f in service_files:
+                          print(f)
                   
-                  # Extract from installer.latest.json if exists
-                  import os
+                  # Extract from installer.latest.json
                   if os.path.exists('installer.latest.json'):
                       with open('installer.latest.json', 'r') as f:
                           installer_data = json.load(f)
@@ -286,7 +245,7 @@ jobs:
                       for f in installer_files:
                           print(f)
                   
-                  # Extract from updater.latest.json if exists
+                  # Extract from updater.latest.json
                   if os.path.exists('updater.latest.json'):
                       with open('updater.latest.json', 'r') as f:
                           updater_data = json.load(f)
@@ -315,28 +274,26 @@ jobs:
                   with open('npm/package.json', 'r') as f:
                       base_package = json.load(f)
                   
-                  # Load latest.json
-                  with open('latest.json', 'r') as f:
-                      latest_data = json.load(f)
-                  
                   # Load service.latest.json
-                  with open('service.latest.json', 'r') as f:
-                      service_data = json.load(f)
+                  service_data = None
+                  if os.path.exists('service.latest.json'):
+                      with open('service.latest.json', 'r') as f:
+                          service_data = json.load(f)
                   
-                  # Load installer.latest.json if exists
+                  # Load installer.latest.json
                   installer_data = None
                   if os.path.exists('installer.latest.json'):
                       with open('installer.latest.json', 'r') as f:
                           installer_data = json.load(f)
                   
-                  # Load updater.latest.json if exists
+                  # Load updater.latest.json
                   updater_data = None
                   if os.path.exists('updater.latest.json'):
                       with open('updater.latest.json', 'r') as f:
                           updater_data = json.load(f)
                   
                   # Create merged package.json
-                  result = merge_package_json(base_package, latest_data, service_data, installer_data, updater_data, version)
+                  result = merge_package_json(base_package, service_data, installer_data, updater_data, version)
                   
                   # Write result
                   with open('npm/package.json', 'w') as f:
@@ -356,24 +313,17 @@ jobs:
           CLEAN_VERSION="${{ steps.get_version.outputs.CLEAN_VERSION }}"
           
           echo "Reading JSON files..."
-          echo "latest.json:"
-          cat latest.json
-          echo ""
           echo "service.latest.json:"
           cat service.latest.json
           echo ""
           
-          if [ -f "installer.latest.json" ]; then
-            echo "installer.latest.json:"
-            cat installer.latest.json
-            echo ""
-          fi
+          echo "installer.latest.json:"
+          cat installer.latest.json
+          echo ""
           
-          if [ -f "updater.latest.json" ]; then
-            echo "updater.latest.json:"
-            cat updater.latest.json
-            echo ""
-          fi
+          echo "updater.latest.json:"
+          cat updater.latest.json
+          echo ""
           
           # Use Python script to merge JSON data
           python3 process_json.py merge_package "$CLEAN_VERSION"
@@ -383,7 +333,6 @@ jobs:
           echo "- updater.latest.json: keys directly added to package.json root (highest priority)"
           echo "- installer: all installer.latest.json content under 'installer' key"
           echo "- service: all service.latest.json content under 'service' key"
-          echo "- latest.json: keys directly added to package.json root (lowest priority)"
           echo "- version: $CLEAN_VERSION (from tag $VERSION)"
           
       - name: Extract and download files using Python
