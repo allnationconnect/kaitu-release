@@ -30,10 +30,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     
     steps:
+      - name: Get version first
+        id: get-version-early
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Extract version from tag (remove 'v' prefix)
+            VERSION=${GITHUB_REF#refs/tags/v}
+          fi
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}"
+
       - name: Checkout Kaitu repository
         uses: actions/checkout@v4
         with:
           repository: allnationconnect/kaitu
+          ref: v${{ steps.get-version-early.outputs.VERSION }}
           path: kaitu
           token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -72,15 +86,17 @@ jobs:
           cache: true
           cache-dependency-path: kaitu/go.sum
 
-      - name: Get version
+      - name: Verify version
         id: get-version
         shell: bash
         working-directory: kaitu
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=$(node -p "require('./client/desktop/package.json').version")
+          # Use the version we already got
+          VERSION="${{ steps.get-version-early.outputs.VERSION }}"
+          # Verify it matches the package.json
+          PACKAGE_VERSION=$(node -p "require('./client/desktop/package.json').version")
+          if [[ "${VERSION}" != "${PACKAGE_VERSION}" ]]; then
+            echo "⚠️ Warning: Tag version ${VERSION} doesn't match package.json version ${PACKAGE_VERSION}"
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
@@ -138,22 +154,15 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-      - name: Checkout Kaitu repository for version
-        uses: actions/checkout@v4
-        with:
-          repository: allnationconnect/kaitu
-          path: kaitu
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Get version
         id: get-version
         shell: bash
-        working-directory: kaitu
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION="${{ github.event.inputs.version }}"
           else
-            VERSION=$(node -p "require('./client/desktop/package.json').version")
+            # Extract version from tag (remove 'v' prefix)
+            VERSION=${GITHUB_REF#refs/tags/v}
           fi
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
