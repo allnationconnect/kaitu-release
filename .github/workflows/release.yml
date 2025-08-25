@@ -210,8 +210,8 @@ jobs:
           cd kaitu
           node scripts/generate-updater-json.js ${VERSION}
           
-          # Copy the generated latest.json back to our release directory
-          cp release/${VERSION}/latest.json ../release/${VERSION}/
+          # Copy all generated *.latest.json files back to our release directory
+          cp release/${VERSION}/*.latest.json ../release/${VERSION}/
           
           echo "✅ Updater JSON generated successfully"
 
@@ -230,7 +230,7 @@ jobs:
       - name: Upload to S3 - Latest JSON Files
         run: |
           VERSION="${{ steps.get-version.outputs.VERSION }}"
-          echo "📤 Uploading latest.json files to S3 root..."
+          echo "📤 Uploading *.latest.json files to S3 root..."
           
           # Upload all *.latest.json files to the desktop root directory
           for file in release/${VERSION}/*.latest.json; do
@@ -243,18 +243,13 @@ jobs:
             fi
           done
           
-          # Also upload latest.json if it exists
-          if [ -f "release/${VERSION}/latest.json" ]; then
-            aws s3 cp release/${VERSION}/latest.json s3://d.all7.cc/kaitu/desktop/latest.json \
-              --acl public-read \
-              --cache-control "public, max-age=300"
-            echo "Uploaded latest.json"
-          fi
           
           echo "✅ Latest JSON files uploaded to S3"
           echo "🌐 Files available at:"
           echo "   https://d.all7.cc/kaitu/desktop/${VERSION}/"
-          echo "   https://d.all7.cc/kaitu/desktop/latest.json"
+          echo "   https://d.all7.cc/kaitu/desktop/s3.latest.json"
+          echo "   https://d.all7.cc/kaitu/desktop/d0.latest.json" 
+          echo "   https://d.all7.cc/kaitu/desktop/jsdelivr.latest.json"
 
       - name: Create tarball of release directory
         run: |
@@ -297,7 +292,9 @@ jobs:
             - Signature files (`.sig`) for auto-updater
             
             **Auto-updater:**
-            - `latest.json` - Auto-updater configuration file
+            - `s3.latest.json` - Auto-updater configuration for S3 CDN
+            - `d0.latest.json` - Auto-updater configuration for d0.all7.cc CDN
+            - `jsdelivr.latest.json` - Auto-updater configuration for JSDeliver CDN
             
             ### 🚀 Installation
             
