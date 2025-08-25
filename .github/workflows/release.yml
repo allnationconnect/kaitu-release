@@ -49,7 +49,7 @@ jobs:
           repository: allnationconnect/kaitu
           ref: v${{ steps.get-version-early.outputs.VERSION }}
           path: kaitu
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
