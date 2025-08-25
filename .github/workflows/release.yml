@@ -23,9 +23,9 @@ jobs:
           - os: macos-latest
             name: macos
             targets: universal-apple-darwin,x86_64-apple-darwin,aarch64-apple-darwin
-          - os: windows-latest
-            name: windows
-            targets: x86_64-pc-windows-msvc
+          # - os: windows-latest
+          #   name: windows
+          #   targets: x86_64-pc-windows-msvc
     
     runs-on: ${{ matrix.os }}
     
@@ -167,6 +167,21 @@ jobs:
           echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
           echo "Version: ${VERSION}"
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-east-1
+
+      - name: Checkout Kaitu repository for scripts
+        uses: actions/checkout@v4
+        with:
+          repository: allnationconnect/kaitu
+          ref: v${{ steps.get-version.outputs.VERSION }}
+          path: kaitu
+          token: ${{ secrets.GH_PAT_TOKEN }}
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -182,6 +197,64 @@ jobs:
           
           echo "📦 Release files organized in release/${VERSION}:"
           ls -la release/${VERSION}/
+
+      - name: Generate updater JSON
+        run: |
+          VERSION="${{ steps.get-version.outputs.VERSION }}"
+          echo "🔄 Generating updater JSON for version ${VERSION}..."
+          
+          # Copy release directory to kaitu folder since script expects it there
+          cp -r release kaitu/
+          
+          # Run the generate-updater-json.js script
+          cd kaitu
+          node scripts/generate-updater-json.js ${VERSION}
+          
+          # Copy the generated latest.json back to our release directory
+          cp release/${VERSION}/latest.json ../release/${VERSION}/
+          
+          echo "✅ Updater JSON generated successfully"
+
+      - name: Upload to S3 - Version Directory
+        run: |
+          VERSION="${{ steps.get-version.outputs.VERSION }}"
+          echo "📤 Uploading release files to S3..."
+          
+          # Upload all files in the version directory to S3
+          aws s3 sync release/${VERSION}/ s3://d.all7.cc/kaitu/desktop/${VERSION}/ \
+            --acl public-read \
+            --cache-control "public, max-age=3600"
+          
+          echo "✅ Version ${VERSION} files uploaded to S3"
+
+      - name: Upload to S3 - Latest JSON Files
+        run: |
+          VERSION="${{ steps.get-version.outputs.VERSION }}"
+          echo "📤 Uploading latest.json files to S3 root..."
+          
+          # Upload all *.latest.json files to the desktop root directory
+          for file in release/${VERSION}/*.latest.json; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              aws s3 cp "$file" s3://d.all7.cc/kaitu/desktop/${filename} \
+                --acl public-read \
+                --cache-control "public, max-age=300"
+              echo "Uploaded ${filename}"
+            fi
+          done
+          
+          # Also upload latest.json if it exists
+          if [ -f "release/${VERSION}/latest.json" ]; then
+            aws s3 cp release/${VERSION}/latest.json s3://d.all7.cc/kaitu/desktop/latest.json \
+              --acl public-read \
+              --cache-control "public, max-age=300"
+            echo "Uploaded latest.json"
+          fi
+          
+          echo "✅ Latest JSON files uploaded to S3"
+          echo "🌐 Files available at:"
+          echo "   https://d.all7.cc/kaitu/desktop/${VERSION}/"
+          echo "   https://d.all7.cc/kaitu/desktop/latest.json"
 
       - name: Create tarball of release directory
         run: |
@@ -222,6 +295,9 @@ jobs:
             - `Kaitu_${{ steps.get-version.outputs.VERSION }}_x64_en-US.msi` - MSI installer
             - NSIS update packages (`.nsis.zip`)
             - Signature files (`.sig`) for auto-updater
+            
+            **Auto-updater:**
+            - `latest.json` - Auto-updater configuration file
             
             ### 🚀 Installation
             
