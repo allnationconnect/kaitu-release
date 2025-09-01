@@ -122,6 +122,8 @@ jobs:
           echo "🏗️ Building Kaitu Desktop for macOS..."
           make prepare
           make build-desktop-macos
+          echo "🔐 Notarizing DMG for macOS..."
+          make notarize-dmg
 
       - name: Build with Makefile (Windows)
         if: matrix.os == 'windows-latest'
