@@ -57,6 +57,18 @@ jobs:
           node-version: '20'
           cache: 'yarn'
           cache-dependency-path: 'kaitu/client/desktop/yarn.lock'
+      
+      - name: Cache yarn dependencies
+        uses: actions/cache@v4
+        id: yarn-cache
+        with:
+          path: |
+            ~/.yarn/cache
+            kaitu/client/desktop/node_modules
+            kaitu/client/desktop/.yarn/cache
+          key: ${{ runner.os }}-yarn-${{ hashFiles('kaitu/client/desktop/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -78,6 +90,18 @@ jobs:
           workspaces: |
             kaitu/client/desktop/src-tauri -> target
           cache-on-failure: true
+          save-if: true
+          shared-key: ${{ matrix.os }}-rust-cache
+          
+      - name: Cache Rust registry and git dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('kaitu/client/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -85,6 +109,16 @@ jobs:
           go-version: '1.24'
           cache: true
           cache-dependency-path: kaitu/go.sum
+          
+      - name: Cache Go build cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('kaitu/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
 
       - name: Verify version
         id: get-version
@@ -103,7 +137,20 @@ jobs:
 
       - name: Install dependencies
         working-directory: kaitu/client/desktop
-        run: yarn install
+        run: |
+          if [[ "${{ steps.yarn-cache.outputs.cache-hit }}" == "true" ]]; then
+            echo "✅ Cache hit! Skipping yarn install"
+            echo "Verifying node_modules exists..."
+            if [ -d "node_modules" ]; then
+              echo "✅ node_modules directory found"
+            else
+              echo "❌ node_modules not found, running yarn install"
+              yarn install --frozen-lockfile
+            fi
+          else
+            echo "❌ Cache miss, running yarn install"
+            yarn install --frozen-lockfile
+          fi
 
       - name: Build with Makefile (macOS)
         if: matrix.os == 'macos-latest'
@@ -183,6 +230,21 @@ jobs:
           ref: v${{ steps.get-version.outputs.VERSION }}
           path: kaitu
           token: ${{ secrets.GH_PAT_TOKEN }}
+      
+      - name: Setup Node.js for scripts
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Cache Node.js for scripts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            kaitu/node_modules
+          key: ${{ runner.os }}-node-scripts-${{ hashFiles('kaitu/package.json', 'kaitu/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-scripts-
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
